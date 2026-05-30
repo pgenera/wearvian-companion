@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws the UI; we just need a no-action-bar platform theme that
+         works from minSdk 26. -->
+    <style name="Theme.WearvianCompanion" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar" />
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="android_wear_capabilities">
+        <item>wearvian_companion_enrollment</item>
+    </string-array>
+    <color name="ic_launcher_background">#102A43</color>
+    <string name="app_name">wearvian companion</string>
+    <style name="Theme.WearvianCompanion" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar"/>
+</resources>

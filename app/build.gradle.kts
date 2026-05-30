@@ -9,7 +9,10 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "org.fivesevenfive.wearvian.companion"
+        // MUST match the watch app's applicationId: the Wear Data Layer delivers
+        // messages only between apps sharing the same (applicationId, signature).
+        // The code namespace stays distinct (org.fivesevenfive.wearvian.companion).
+        applicationId = "org.fivesevenfive.wearvian"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

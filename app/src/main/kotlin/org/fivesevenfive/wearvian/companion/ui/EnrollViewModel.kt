@@ -117,6 +117,8 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
                     deviceName = req.deviceName,
                 )
                 EnrollmentContract.VehicleResult(
+                    vehicleId = v.vehicleId,
+                    vin = v.vin,
                     vasVehicleId = v.vasVehicleId,
                     vehiclePublicKey = v.vehiclePublicKey,
                     vasPhoneId = enrolled.vasPhoneId,

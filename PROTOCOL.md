@@ -49,6 +49,8 @@ UTF-8 JSON:
   "status": "ok",
   "vehicles": [
     {
+      "vehicleId": "...",
+      "vin": "...",
       "vasVehicleId": "...",
       "vehiclePublicKey": "<hex>",
       "vasPhoneId": "...",

@@ -40,6 +40,8 @@ object EnrollmentContract {
     }
 
     data class VehicleResult(
+        val vehicleId: String,
+        val vin: String,
         val vasVehicleId: String,
         val vehiclePublicKey: String,
         val vasPhoneId: String,
@@ -56,6 +58,8 @@ object EnrollmentContract {
         vehicles.forEach { v ->
             arr.put(
                 JSONObject()
+                    .put("vehicleId", v.vehicleId)
+                    .put("vin", v.vin)
                     .put("vasVehicleId", v.vasVehicleId)
                     .put("vehiclePublicKey", v.vehiclePublicKey)
                     .put("vasPhoneId", v.vasPhoneId)

@@ -6,6 +6,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.fivesevenfive.wearvian.companion.auth.RivianAuthClient.SessionTokens
 import org.fivesevenfive.wearvian.companion.protocol.RivianGql
+import org.fivesevenfive.wearvian.companion.util.logi
+import org.fivesevenfive.wearvian.companion.util.logw
 
 /**
  * Authenticated Rivian GraphQL calls used during enrollment: `getUserInfo` and
@@ -31,13 +33,18 @@ class RivianCloud(
             .build()
         http.newCall(req).execute().use { resp ->
             val payload = resp.body?.string().orEmpty()
+            logi("authedPost <- HTTP ${resp.code} bytes=${payload.length}")
             if (resp.code != 200) throw RivianCloudError("HTTP ${resp.code}: $payload")
             return payload
         }
     }
 
-    fun getUserInfo(tokens: SessionTokens): RivianGql.UserInfo =
-        RivianGql.parseUserInfo(authedPost(tokens, RivianGql.getUserInfoBody()))
+    fun getUserInfo(tokens: SessionTokens): RivianGql.UserInfo {
+        logi("getUserInfo: requesting")
+        val info = RivianGql.parseUserInfo(authedPost(tokens, RivianGql.getUserInfoBody()))
+        logi("getUserInfo: userId=${info.userId} vehicles=${info.vehicles.size} vins=${info.vehicles.map { it.vin }}")
+        return info
+    }
 
     /**
      * Enroll [publicKeyHex] (the watch's public key) against [vehicleId], then
@@ -58,11 +65,17 @@ class RivianCloud(
             deviceType = "phone",
             deviceName = deviceName,
         )
+        logi("enrollPhone: vehicleId=$vehicleId deviceName=$deviceName publicKeyLen=${publicKeyHex.length}")
         val ok = RivianGql.parseEnrollSuccess(authedPost(tokens, body))
+        logi("enrollPhone: success=$ok")
         if (!ok) throw RivianCloudError("EnrollPhone returned success=false")
         val refreshed = authedPost(tokens, RivianGql.getUserInfoBody())
-        return RivianGql.findEnrolledPhone(refreshed, publicKeyHex)
-            ?: throw RivianCloudError("Enrolled phone not found in getUserInfo after EnrollPhone")
+        return RivianGql.findEnrolledPhone(refreshed, publicKeyHex)?.also {
+            logi("enrollPhone: read back vasPhoneId=${it.vasPhoneId} identityId=${it.identityId}")
+        } ?: run {
+            logw("enrollPhone: enrolled phone not found in getUserInfo after EnrollPhone")
+            throw RivianCloudError("Enrolled phone not found in getUserInfo after EnrollPhone")
+        }
     }
 
     companion object {

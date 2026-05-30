@@ -4,6 +4,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.fivesevenfive.wearvian.companion.util.logi
+import org.fivesevenfive.wearvian.companion.util.logw
 import org.json.JSONObject
 
 /**
@@ -38,16 +40,19 @@ class RivianAuthClient(
         data class MfaRequired(val otpToken: String) : LoginResult
     }
 
-    private fun post(headers: Map<String, String>, payload: String): JSONObject {
+    private fun post(operation: String, headers: Map<String, String>, payload: String): JSONObject {
+        logi("POST $operation -> gateway (headers=${headers.keys})")
         val req = Request.Builder()
             .url(GATEWAY_URL)
             .apply { headers.forEach { (k, v) -> header(k, v) } }
             .post(payload.toRequestBody(JSON))
             .build()
         http.newCall(req).execute().use { resp ->
+            logi("POST $operation <- HTTP ${resp.code}")
             if (resp.code != 200) throw RivianAuthError("HTTP ${resp.code} from Rivian gateway")
             val body = JSONObject(resp.body?.string().orEmpty())
             if (body.has("errors") && !body.isNull("errors")) {
+                logw("$operation returned GraphQL errors: ${body.get("errors")}")
                 throw RivianAuthError(body.get("errors").toString())
             }
             return body.optJSONObject("data")
@@ -61,7 +66,8 @@ class RivianAuthClient(
             .put("query", CSRF_QUERY)
             .put("variables", JSONObject.NULL)
             .toString()
-        val csrf = post(BASE_HEADERS, payload).getJSONObject("createCsrfToken")
+        val csrf = post("CreateCSRFToken", BASE_HEADERS, payload).getJSONObject("createCsrfToken")
+        logi("createCsrfToken: ok")
         return CsrfTokens(csrf.getString("csrfToken"), csrf.getString("appSessionToken"))
     }
 
@@ -75,11 +81,13 @@ class RivianAuthClient(
             .put("query", LOGIN_QUERY)
             .put("variables", JSONObject().put("email", email).put("password", password))
             .toString()
-        val login = post(headers, payload).getJSONObject("login")
+        val login = post("Login", headers, payload).getJSONObject("login")
         val otpToken = login.optString("otpToken", "")
         return if (otpToken.isNotEmpty()) {
+            logi("login: MFA required")
             LoginResult.MfaRequired(otpToken)
         } else {
+            logi("login: success (no MFA)")
             LoginResult.Success(
                 SessionTokens(csrf.csrfToken, csrf.appSessionToken, login.getString("userSessionToken")),
             )
@@ -104,7 +112,8 @@ class RivianAuthClient(
                 JSONObject().put("email", email).put("otpCode", otpCode).put("otpToken", otpToken),
             )
             .toString()
-        val login = post(headers, payload).getJSONObject("loginWithOTP")
+        val login = post("LoginWithOTP", headers, payload).getJSONObject("loginWithOTP")
+        logi("loginWithOtp: success")
         return SessionTokens(csrf.csrfToken, csrf.appSessionToken, login.getString("userSessionToken"))
     }
 

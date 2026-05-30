@@ -10,6 +10,8 @@ import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import org.fivesevenfive.wearvian.companion.R
 import org.fivesevenfive.wearvian.companion.ui.MainActivity
+import org.fivesevenfive.wearvian.companion.util.logi
+import org.fivesevenfive.wearvian.companion.util.logw
 
 /**
  * Receives the watch's `/wearvian/enroll/request` in the background, stashes it
@@ -20,10 +22,15 @@ import org.fivesevenfive.wearvian.companion.ui.MainActivity
 class WearEnrollmentListenerService : WearableListenerService() {
 
     override fun onMessageReceived(event: MessageEvent) {
+        logi("onMessageReceived path=${event.path} from=${event.sourceNodeId} bytes=${event.data.size}")
         if (event.path != EnrollmentContract.PATH_REQUEST) return
-        val request = runCatching { EnrollmentContract.Request.parse(event.data) }.getOrNull() ?: return
+        val request = runCatching { EnrollmentContract.Request.parse(event.data) }
+            .onFailure { logw("failed to parse enroll request", it) }
+            .getOrNull() ?: return
+        logi("enroll request parsed: requestId=${request.requestId} device=${request.deviceName} publicKeyLen=${request.publicKeyHex.length}")
         PendingEnrollment.submit(request, event.sourceNodeId)
         notifyUser()
+        logi("pending enrollment stored; user notified")
     }
 
     private fun notifyUser() {

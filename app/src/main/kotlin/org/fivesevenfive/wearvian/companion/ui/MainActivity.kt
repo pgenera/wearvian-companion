@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.fivesevenfive.wearvian.companion.ui.EnrollViewModel.UiState
+import org.fivesevenfive.wearvian.companion.util.logi
 
 class MainActivity : ComponentActivity() {
 
@@ -33,6 +34,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        logi("MainActivity: onCreate")
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {

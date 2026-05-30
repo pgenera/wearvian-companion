@@ -12,6 +12,9 @@ import org.fivesevenfive.wearvian.companion.auth.RivianAuthClient
 import org.fivesevenfive.wearvian.companion.net.RivianCloud
 import org.fivesevenfive.wearvian.companion.store.SessionStore
 import org.fivesevenfive.wearvian.companion.wear.EnrollmentContract
+import org.fivesevenfive.wearvian.companion.util.loge
+import org.fivesevenfive.wearvian.companion.util.logi
+import org.fivesevenfive.wearvian.companion.util.logw
 import org.fivesevenfive.wearvian.companion.wear.PendingEnrollment
 import org.fivesevenfive.wearvian.companion.wear.WearTransport
 
@@ -48,6 +51,7 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
     init {
         viewModelScope.launch {
             PendingEnrollment.request.collect { req ->
+                logi("pending request changed: ${req?.requestId} (state=${_state.value::class.simpleName})")
                 if (req != null && _state.value is UiState.Waiting) {
                     _state.value = UiState.NeedCredentials(req.deviceName)
                 }
@@ -56,7 +60,10 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun submitCredentials(email: String, password: String) {
-        val req = PendingEnrollment.request.value ?: return
+        val req = PendingEnrollment.request.value ?: run {
+            logw("submitCredentials but no pending request"); return
+        }
+        logi("submitCredentials: email=$email requestId=${req.requestId}")
         pendingEmail = email
         _state.value = UiState.Working("Signing in to Rivian…")
         viewModelScope.launch {
@@ -72,6 +79,7 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 if (tokens == null) {
+                    logi("submitCredentials: -> MFA required")
                     _state.value = UiState.MfaRequired(email)
                 } else {
                     finishEnrollment(tokens, req)
@@ -83,6 +91,7 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun submitOtp(otpCode: String) {
+        logi("submitOtp")
         val req = PendingEnrollment.request.value ?: return
         val c = csrf ?: return
         val token = otpToken ?: return
@@ -129,13 +138,17 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
         val userId = results.firstOrNull()?.second.orEmpty()
         val vehicles = results.map { it.first }
         val payload = EnrollmentContract.successResult(req.requestId, vehicles, userId, tokens)
-        PendingEnrollment.sourceNodeId?.let { withContext(Dispatchers.IO) { transport.sendResult(it, payload) } }
+        val node = PendingEnrollment.sourceNodeId
+        logi("finishEnrollment: enrolled ${vehicles.size} vehicle(s); sending result to node=$node")
+        node?.let { withContext(Dispatchers.IO) { transport.sendResult(it, payload) } }
         PendingEnrollment.clear()
         _state.value = UiState.Done(vehicles.size)
+        logi("finishEnrollment: done")
     }
 
     private suspend fun fail(requestId: String, e: Exception) {
         val msg = e.message ?: e.javaClass.simpleName
+        loge("enrollment failed: $msg", e)
         PendingEnrollment.sourceNodeId?.let { node ->
             runCatching {
                 withContext(Dispatchers.IO) {

@@ -1,11 +1,19 @@
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Properties
 import java.util.TimeZone
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// Release signing — SAME key as the watch app (Wear Data Layer needs a matching
+// signature; Play uses one signing key per listing). See ../wearvian/docs/play-store-packaging.md.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) keystorePropertiesFile.inputStream().use { load(it) }
 }
 
 // Stamped into BuildConfig.BUILD_TIME so the on-device version label changes on
@@ -25,9 +33,22 @@ android {
         applicationId = "org.fivesevenfive.wearvian"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
+        // versionCode lanes under the shared package: 1xxx = Wear, 2xxx = phone.
+        // Must stay unique across BOTH apps and only ever increase.
+        versionCode = 2002
         versionName = "0.2.0"
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -37,6 +58,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (keystorePropertiesFile.exists()) signingConfig = signingConfigs.getByName("release")
         }
     }
 

@@ -1,8 +1,18 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.TimeZone
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// Stamped into BuildConfig.BUILD_TIME so the on-device version label changes on
+// every build — lets you confirm at a glance whether the installed APK is current.
+val buildTime: String = SimpleDateFormat("yyyy-MM-dd HH:mm").apply {
+    timeZone = TimeZone.getTimeZone("America/New_York")
+}.format(Date())
 
 android {
     namespace = "org.fivesevenfive.wearvian.companion"
@@ -17,6 +27,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
     }
 
     buildTypes {

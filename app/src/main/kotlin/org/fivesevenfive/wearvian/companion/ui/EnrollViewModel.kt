@@ -27,8 +27,8 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
     sealed interface UiState {
         /** No watch request pending. */
         data object Waiting : UiState
-        /** A watch request is pending; collect Rivian credentials. */
-        data class NeedCredentials(val watchName: String) : UiState
+        /** A watch request is pending; collect Rivian credentials. [rememberedEmail] pre-fills the form. */
+        data class NeedCredentials(val watchName: String, val rememberedEmail: String) : UiState
         data class MfaRequired(val email: String) : UiState
         data class Working(val message: String) : UiState
         data class Done(val vehicleCount: Int) : UiState
@@ -53,7 +53,7 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
             PendingEnrollment.request.collect { req ->
                 logi("pending request changed: ${req?.requestId} (state=${_state.value::class.simpleName})")
                 if (req != null && _state.value is UiState.Waiting) {
-                    _state.value = UiState.NeedCredentials(req.deviceName)
+                    _state.value = UiState.NeedCredentials(req.deviceName, store.loadEmail())
                 }
             }
         }
@@ -65,6 +65,7 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
         }
         logi("submitCredentials: email=$email requestId=${req.requestId}")
         pendingEmail = email
+        store.saveEmail(email)
         _state.value = UiState.Working("Signing in to Rivian…")
         viewModelScope.launch {
             try {

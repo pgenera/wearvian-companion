@@ -16,8 +16,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -32,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.fivesevenfive.wearvian.companion.BuildConfig
@@ -54,7 +60,7 @@ class MainActivity : ComponentActivity() {
             notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         setContent {
-            MaterialTheme {
+            WearvianTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val state by vm.state.collectAsStateWithLifecycle()
                     EnrollScreen(
@@ -88,7 +94,7 @@ private fun EnrollScreen(
                     "“Enroll” to begin.",
             )
 
-            is UiState.NeedCredentials -> CredentialsForm(state.watchName, onCredentials)
+            is UiState.NeedCredentials -> CredentialsForm(state.watchName, state.rememberedEmail, onCredentials)
 
             is UiState.MfaRequired -> OtpForm(state.email, onOtp)
 
@@ -118,9 +124,10 @@ private fun EnrollScreen(
 }
 
 @Composable
-private fun CredentialsForm(watchName: String, onSubmit: (String, String) -> Unit) {
-    var email by remember { mutableStateOf("") }
+private fun CredentialsForm(watchName: String, initialEmail: String, onSubmit: (String, String) -> Unit) {
+    var email by remember { mutableStateOf(initialEmail) }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     Text("Sign in to Rivian to enroll “$watchName” as a phone key.")
     OutlinedTextField(
         value = email,
@@ -134,8 +141,16 @@ private fun CredentialsForm(watchName: String, onSubmit: (String, String) -> Uni
         onValueChange = { password = it },
         label = { Text("Password") },
         singleLine = true,
-        visualTransformation = PasswordVisualTransformation(),
+        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+        trailingIcon = {
+            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                Icon(
+                    imageVector = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                    contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                )
+            }
+        },
     )
     Button(
         onClick = { onSubmit(email.trim(), password) },

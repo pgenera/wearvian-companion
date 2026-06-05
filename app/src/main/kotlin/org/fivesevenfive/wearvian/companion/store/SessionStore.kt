@@ -35,11 +35,22 @@ class SessionStore(context: Context) {
         return SessionTokens(csrf, aSess, uSess)
     }
 
-    fun clear() = prefs.edit().clear().apply()
+    /** The last email signed in with, pre-filled on the next enrollment for convenience. */
+    fun saveEmail(email: String) = prefs.edit().putString(KEY_EMAIL, email).apply()
+
+    fun loadEmail(): String = prefs.getString(KEY_EMAIL, null).orEmpty()
+
+    /** Clear tokens but keep the remembered email so the username stays pre-filled. */
+    fun clear() {
+        val email = prefs.getString(KEY_EMAIL, null)
+        prefs.edit().clear().apply()
+        if (email != null) prefs.edit().putString(KEY_EMAIL, email).apply()
+    }
 
     private companion object {
         const val KEY_CSRF = "csrfToken"
         const val KEY_ASESS = "appSessionToken"
         const val KEY_USESS = "userSessionToken"
+        const val KEY_EMAIL = "lastEmail"
     }
 }

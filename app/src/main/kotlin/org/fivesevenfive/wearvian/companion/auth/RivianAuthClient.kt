@@ -1,5 +1,8 @@
 package org.fivesevenfive.wearvian.companion.auth
 
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -7,6 +10,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.fivesevenfive.wearvian.companion.util.logi
 import org.fivesevenfive.wearvian.companion.util.logw
 import org.json.JSONObject
+import java.util.UUID
 
 /**
  * Minimal Rivian authentication client: turns email + password (+ MFA OTP) into
@@ -21,7 +25,7 @@ import org.json.JSONObject
  * community-tested client. No credentials are persisted by this class.
  */
 class RivianAuthClient(
-    private val http: OkHttpClient = OkHttpClient(),
+    private val http: OkHttpClient = defaultClient(),
 ) {
     class RivianAuthError(message: String) : Exception(message)
 
@@ -41,9 +45,15 @@ class RivianAuthClient(
     }
 
     private fun post(operation: String, headers: Map<String, String>, payload: String): JSONObject {
-        logi("POST $operation -> gateway (headers=${headers.keys})")
+        // The Rivian gateway requires a device-client-id header on every GraphQL
+        // request; without it, Login is rejected as UNAUTHENTICATED even with valid
+        // Csrf-Token/A-Sess. The reference client adds a fresh `dc-cid: m-ios-{uuid}`
+        // per call (rivian.py __graphql_query). Header name is lowercase.
+        val dcCid = "m-ios-${UUID.randomUUID()}"
+        logi("POST $operation -> gateway (headers=${headers.keys + "dc-cid"})")
         val req = Request.Builder()
             .url(GATEWAY_URL)
+            .header("dc-cid", dcCid)
             .apply { headers.forEach { (k, v) -> header(k, v) } }
             .post(payload.toRequestBody(JSON))
             .build()
@@ -117,8 +127,40 @@ class RivianAuthClient(
         return SessionTokens(csrf.csrfToken, csrf.appSessionToken, login.getString("userSessionToken"))
     }
 
+    /**
+     * Cookie jar that persists Set-Cookie values across the CreateCSRFToken ->
+     * Login -> LoginWithOTP sequence. The Rivian gateway sets a session cookie on
+     * the CreateCSRFToken response and rejects Login with `UNAUTHENTICATED` if that
+     * cookie isn't echoed back — the reference Python client gets this for free via
+     * aiohttp.ClientSession; a bare OkHttpClient has no cookie store, so we add one.
+     */
+    private class SessionCookieJar : CookieJar {
+        private val cookies = mutableListOf<Cookie>()
+
+        @Synchronized
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            for (c in cookies) {
+                this.cookies.removeAll { it.name == c.name && it.domain == c.domain && it.path == c.path }
+                this.cookies.add(c)
+            }
+            logi("cookies: stored ${cookies.map { it.name }} from ${url.host} (jar size=${this.cookies.size})")
+        }
+
+        @Synchronized
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            val now = System.currentTimeMillis()
+            this.cookies.removeAll { it.expiresAt < now }
+            val match = this.cookies.filter { it.matches(url) }
+            logi("cookies: sending ${match.map { it.name }} to ${url.host}")
+            return match
+        }
+    }
+
     companion object {
         const val GATEWAY_URL = "https://rivian.com/api/gql/gateway/graphql"
+
+        private fun defaultClient(): OkHttpClient =
+            OkHttpClient.Builder().cookieJar(SessionCookieJar()).build()
         private val JSON = "application/json".toMediaType()
         private const val APOLLO_CLIENT_NAME = "com.rivian.ios.consumer-apollo-ios"
 

@@ -9,5 +9,9 @@ build/
 .cxx
 local.properties
 *.apk
+
+# Release signing — NEVER commit these
+keystore.properties
+*.jks
 *.keystore
 !debug.keystore

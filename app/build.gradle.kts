@@ -35,8 +35,8 @@ android {
         targetSdk = 34
         // versionCode lanes under the shared package: 1xxx = Wear, 2xxx = phone.
         // Must stay unique across BOTH apps and only ever increase.
-        versionCode = 2006
-        versionName = "0.3.0"
+        versionCode = 2007
+        versionName = "0.4.0"
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
     }
 

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -82,7 +83,9 @@ private fun EnrollScreen(
     onOtp: (String) -> Unit,
     onReset: () -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    // targetSdk 35 enforces edge-to-edge: the Surface background still spans under the system
+    // bars, but inset the content so nothing draws beneath the status/navigation bars.
+    Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),

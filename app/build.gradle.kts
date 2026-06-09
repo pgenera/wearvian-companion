@@ -32,7 +32,7 @@ android {
         // The code namespace stays distinct (org.fivesevenfive.wearvian.companion).
         applicationId = "org.fivesevenfive.wearvian"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35       // Play requires new apps to target API 35+
         // versionCode lanes under the shared package: 1xxx = Wear, 2xxx = phone.
         // Must stay unique across BOTH apps and only ever increase.
         versionCode = 2007
@@ -53,7 +53,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrink + obfuscate: renames classes/methods so the reverse-engineered Rivian
+            // cloud/GraphQL protocol isn't trivially readable from the shipped APK (wire calls
+            // unchanged). A courtesy to Rivian, matching the watch app — not hardened DRM.
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

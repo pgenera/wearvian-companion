@@ -35,7 +35,7 @@ android {
         targetSdk = 35       // Play requires new apps to target API 35+
         // versionCode lanes under the shared package: 1xxx = Wear, 2xxx = phone.
         // Must stay unique across BOTH apps and only ever increase.
-        versionCode = 2007
+        versionCode = 2008
         versionName = "0.4.0"
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
     }

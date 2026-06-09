@@ -15,3 +15,6 @@ keystore.properties
 *.jks
 *.keystore
 !debug.keystore
+
+# Kotlin compiler session artifacts
+.kotlin/

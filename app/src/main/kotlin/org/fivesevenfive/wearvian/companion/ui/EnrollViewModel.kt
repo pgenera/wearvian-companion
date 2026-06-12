@@ -125,6 +125,7 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
                     vehicleId = v.vehicleId,
                     publicKeyHex = req.publicKeyHex,
                     deviceName = req.deviceName,
+                    deviceType = req.deviceType, // watch sends "watch"; cloud acceptance unconfirmed
                 )
                 EnrollmentContract.VehicleResult(
                     vehicleId = v.vehicleId,

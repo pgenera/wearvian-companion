@@ -57,15 +57,21 @@ class RivianCloud(
         vehicleId: String,
         publicKeyHex: String,
         deviceName: String,
+        // The cloud stores a per-key device type (getUserInfo reads it back as enrolled.deviceType).
+        // We let the watch drive it (it sends "watch") instead of hardcoding "phone", but fall back
+        // to "phone" if unset/unknown. EXPERIMENTAL: it is NOT confirmed the EnrollPhone schema
+        // accepts "watch" — if it rejects the value this enrollment will fail. Test before relying.
+        deviceType: String,
     ): RivianGql.EnrolledPhone {
+        val type = deviceType.ifBlank { "phone" }
         val body = RivianGql.enrollPhoneBody(
             userId = userId,
             vehicleId = vehicleId,
             publicKeyHex = publicKeyHex,
-            deviceType = "phone",
+            deviceType = type,
             deviceName = deviceName,
         )
-        logi("enrollPhone: vehicleId=$vehicleId deviceName=$deviceName publicKeyLen=${publicKeyHex.length}")
+        logi("enrollPhone: vehicleId=$vehicleId deviceType=$type deviceName=$deviceName publicKeyLen=${publicKeyHex.length}")
         val ok = RivianGql.parseEnrollSuccess(authedPost(tokens, body))
         logi("enrollPhone: success=$ok")
         if (!ok) throw RivianCloudError("EnrollPhone returned success=false")

@@ -5,7 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Wire contract for the watch <-> phone Data Layer handoff. See PROTOCOL.md.
+ * Wire contract for the watch <-> phone Data Layer handoff.
  * Keep paths/payload shapes in sync with the watch app.
  */
 object EnrollmentContract {

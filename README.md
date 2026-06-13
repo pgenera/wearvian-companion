@@ -16,9 +16,12 @@ The watch generates its own EC keypair and **its private key never leaves the wa
 only ever receives the watch's *public* key and submits it to Rivian's `EnrollPhone`. This app
 holds no BLE key material.
 
-## Protocol
+## How it works
 
-See [PROTOCOL.md](PROTOCOL.md) for the watch ↔ phone Data Layer message contract.
+On enrollment the watch sends this app its **public key** over the Wear OS Data Layer. The app
+signs in to Rivian (email + password + MFA), calls `getUserInfo` and `EnrollPhone` to register that
+public key with the account's vehicle(s), and sends the resulting vehicle identifiers back to the
+watch. The implementation is in the `auth`, `net`, and `wear` packages.
 
 ## Status
 

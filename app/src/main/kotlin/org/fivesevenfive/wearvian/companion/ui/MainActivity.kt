@@ -20,7 +20,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,7 +81,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun EnrollScreen(
     state: UiState,
-    onCredentials: (String, String) -> Unit,
+    onCredentials: (String, String, Boolean) -> Unit,
     onOtp: (String) -> Unit,
     onReset: () -> Unit,
 ) {
@@ -117,8 +119,13 @@ private fun EnrollScreen(
             }
         }
     }
+        // Show the git branch only when it isn't main (or unknown), so a feature build is obvious.
+        val branchSuffix = BuildConfig.GIT_BRANCH
+            .takeIf { it.isNotBlank() && it != "main" }
+            ?.let { " · $it" }
+            .orEmpty()
         Text(
-            text = "v${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TIME}",
+            text = "v${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TIME}$branchSuffix",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
@@ -127,10 +134,11 @@ private fun EnrollScreen(
 }
 
 @Composable
-private fun CredentialsForm(watchName: String, initialEmail: String, onSubmit: (String, String) -> Unit) {
+private fun CredentialsForm(watchName: String, initialEmail: String, onSubmit: (String, String, Boolean) -> Unit) {
     var email by remember { mutableStateOf(initialEmail) }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var enrollAsWatch by remember { mutableStateOf(true) }
     Text("Sign in to Rivian to enroll “$watchName” as a phone key.")
     OutlinedTextField(
         value = email,
@@ -155,8 +163,12 @@ private fun CredentialsForm(watchName: String, initialEmail: String, onSubmit: (
             }
         },
     )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = enrollAsWatch, onCheckedChange = { enrollAsWatch = it })
+        Text("Enroll as watch key")
+    }
     Button(
-        onClick = { onSubmit(email.trim(), password) },
+        onClick = { onSubmit(email.trim(), password, enrollAsWatch) },
         enabled = email.isNotBlank() && password.isNotBlank(),
     ) { Text("Sign in") }
 }

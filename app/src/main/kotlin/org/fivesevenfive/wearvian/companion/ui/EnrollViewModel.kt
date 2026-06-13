@@ -47,6 +47,9 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
     private var csrf: RivianAuthClient.CsrfTokens? = null
     private var otpToken: String? = null
     private var pendingEmail: String? = null
+    // From the login screen's "Enroll as watch key" checkbox: true → pass the watch-supplied
+    // deviceType ("watch") through to the cloud; false → override to "phone" (the prior behavior).
+    private var enrollAsWatch: Boolean = true
 
     init {
         viewModelScope.launch {
@@ -59,11 +62,12 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun submitCredentials(email: String, password: String) {
+    fun submitCredentials(email: String, password: String, enrollAsWatch: Boolean) {
         val req = PendingEnrollment.request.value ?: run {
             logw("submitCredentials but no pending request"); return
         }
-        logi("submitCredentials: email=$email requestId=${req.requestId}")
+        logi("submitCredentials: email=$email requestId=${req.requestId} enrollAsWatch=$enrollAsWatch")
+        this.enrollAsWatch = enrollAsWatch // remembered across a possible MFA step
         pendingEmail = email
         store.saveEmail(email)
         _state.value = UiState.Working("Signing in to Rivian…")
@@ -119,13 +123,16 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
             store.saveTokens(tokens)
             val info = cloud.getUserInfo(tokens)
             info.vehicles.map { v ->
+                // "Enroll as watch key" on → pass the watch-supplied type ("watch"); off → "phone"
+                // (the original behavior). Cloud acceptance of "watch" is unconfirmed.
+                val deviceType = if (enrollAsWatch) req.deviceType else "phone"
                 val enrolled = cloud.enrollPhone(
                     tokens = tokens,
                     userId = info.userId,
                     vehicleId = v.vehicleId,
                     publicKeyHex = req.publicKeyHex,
                     deviceName = req.deviceName,
-                    deviceType = req.deviceType, // watch sends "watch"; cloud acceptance unconfirmed
+                    deviceType = deviceType,
                 )
                 EnrollmentContract.VehicleResult(
                     vehicleId = v.vehicleId,

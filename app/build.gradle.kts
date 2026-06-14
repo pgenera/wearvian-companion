@@ -73,10 +73,6 @@ android {
                 "proguard-rules.pro",
             )
             if (keystorePropertiesFile.exists()) signingConfig = signingConfigs.getByName("release")
-            // Branch-local: this experimental (wearvian-enroll-as-watch) release goes only to the
-            // internal testing track and is never promoted, so mark it "- test" to keep it distinct
-            // from a real production release. Drop this line if/when the branch is productionized.
-            versionNameSuffix = " - test"
         }
         debug {
             // Debug builds get a "- debug" version suffix so a debug build uploaded to Play

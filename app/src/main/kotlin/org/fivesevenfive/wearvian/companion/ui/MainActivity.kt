@@ -138,7 +138,9 @@ private fun CredentialsForm(watchName: String, initialEmail: String, onSubmit: (
     var email by remember { mutableStateOf(initialEmail) }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var enrollAsWatch by remember { mutableStateOf(true) }
+    // Default OFF: registering as a watch (keyDeviceSubtype="WATCH") makes the vehicle treat the key
+    // as a watch, which does NOT get passive/proximity unlock. Off = a normal phone key (proximity works).
+    var enrollAsWatch by remember { mutableStateOf(false) }
     Text("Sign in to Rivian to enroll “$watchName” as a phone key.")
     OutlinedTextField(
         value = email,
@@ -165,7 +167,7 @@ private fun CredentialsForm(watchName: String, initialEmail: String, onSubmit: (
     )
     Row(verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = enrollAsWatch, onCheckedChange = { enrollAsWatch = it })
-        Text("Enroll as watch key")
+        Text("Enroll as watch key (disables proximity unlock)")
     }
     Button(
         onClick = { onSubmit(email.trim(), password, enrollAsWatch) },

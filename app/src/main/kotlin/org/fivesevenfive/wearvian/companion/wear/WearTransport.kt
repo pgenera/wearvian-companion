@@ -7,9 +7,9 @@ import org.fivesevenfive.wearvian.companion.util.logi
 
 /**
  * Sends the enrollment result back to the watch over the Data Layer. Uses
- * `MessageClient` as the primary transport (see PROTOCOL.md). For payloads that
- * approach the ~100 KB message limit a `DataClient` fallback can be added; the
- * current result payload is well under that.
+ * `MessageClient` as the primary transport. For payloads that approach the
+ * ~100 KB message limit a `DataClient` fallback can be added; the current
+ * result payload is well under that.
  */
 class WearTransport(private val context: Context) {
 

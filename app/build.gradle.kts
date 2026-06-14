@@ -45,8 +45,8 @@ android {
         targetSdk = 35       // Play requires new apps to target API 35+
         // versionCode lanes under the shared package: 1xxx = Wear, 2xxx = phone.
         // Must stay unique across BOTH apps and only ever increase.
-        versionCode = 2009
-        versionName = "0.4.1"
+        versionCode = 2010
+        versionName = "0.4.2"
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
         buildConfigField("String", "GIT_BRANCH", "\"$gitBranch\"")
     }
@@ -73,6 +73,11 @@ android {
                 "proguard-rules.pro",
             )
             if (keystorePropertiesFile.exists()) signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            // Debug builds get a "- debug" version suffix so a debug build uploaded to Play
+            // (Internal App Sharing) is unmistakable from a real release on-device and in the console.
+            versionNameSuffix = " - debug"
         }
     }
 

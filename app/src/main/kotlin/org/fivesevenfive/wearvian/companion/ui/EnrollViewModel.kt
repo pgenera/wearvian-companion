@@ -123,16 +123,15 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
             store.saveTokens(tokens)
             val info = cloud.getUserInfo(tokens)
             info.vehicles.map { v ->
-                // "Enroll as watch key" on → pass the watch-supplied type ("watch"); off → "phone"
-                // (the original behavior). Cloud acceptance of "watch" is unconfirmed.
-                val deviceType = if (enrollAsWatch) req.deviceType else "phone"
+                // "Enroll as watch key" on → try keyDeviceSubtype="WATCH"+source="MOBILE" (see
+                // RivianCloud.enrollPhone). Off → a normal phone enrollment.
                 val enrolled = cloud.enrollPhone(
                     tokens = tokens,
                     userId = info.userId,
                     vehicleId = v.vehicleId,
                     publicKeyHex = req.publicKeyHex,
                     deviceName = req.deviceName,
-                    deviceType = deviceType,
+                    asWatch = enrollAsWatch,
                 )
                 EnrollmentContract.VehicleResult(
                     vehicleId = v.vehicleId,

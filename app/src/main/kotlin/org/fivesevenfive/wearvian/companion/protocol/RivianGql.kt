@@ -27,7 +27,7 @@ object RivianGql {
             "actualGeneralAssemblyDate vehicleState { supportedFeatures { __typename name status } } } }"
     private const val PHONES_FRAGMENT =
         "enrolledPhones { __typename vas { __typename vasPhoneId publicKey } " +
-            "enrolled { __typename deviceType deviceName vehicleId identityId shortName } }"
+            "enrolled { __typename deviceType deviceName keyDeviceSubtype vehicleId identityId shortName } }"
 
     fun getUserInfoBody(): String =
         JSONObject()
@@ -45,6 +45,11 @@ object RivianGql {
         publicKeyHex: String,
         deviceType: String,
         deviceName: String,
+        // EnrollPhoneAttributes also accepts these (the official app leaves them absent). The decompile
+        // shows keyDeviceSubtype is a nullable String and source an enum (MOBILE/WEB). For the
+        // watch-key experiment we send keyDeviceSubtype="WATCH" + source="MOBILE"; null = omit.
+        keyDeviceSubtype: String? = null,
+        source: String? = null,
     ): String {
         val attrs = JSONObject()
             .put("userId", userId)
@@ -52,6 +57,8 @@ object RivianGql {
             .put("publicKey", publicKeyHex)
             .put("type", deviceType)
             .put("name", deviceName)
+        if (keyDeviceSubtype != null) attrs.put("keyDeviceSubtype", keyDeviceSubtype)
+        if (source != null) attrs.put("source", source)
         return JSONObject()
             .put("operationName", "EnrollPhone")
             .put("variables", JSONObject().put("attrs", attrs))
@@ -72,8 +79,14 @@ object RivianGql {
 
     data class UserInfo(val userId: String, val vehicles: List<Vehicle>)
 
-    /** vasPhoneId + identityId for an enrolled phone, looked up by our public key. */
-    data class EnrolledPhone(val vasPhoneId: String, val identityId: String)
+    /** Enrolled-key fields looked up by our public key. deviceType/keyDeviceSubtype are the
+     *  server's readback of how the key was classified — logged to verify the watch experiment. */
+    data class EnrolledPhone(
+        val vasPhoneId: String,
+        val identityId: String,
+        val deviceType: String = "",
+        val keyDeviceSubtype: String = "",
+    )
 
     fun parseUserInfo(responseJson: String): UserInfo {
         val user = JSONObject(responseJson).getJSONObject("data").getJSONObject("currentUser")
@@ -113,8 +126,12 @@ object RivianGql {
         fun match(vas: JSONObject?, enrolled: JSONObject?): EnrolledPhone? {
             if (vas == null) return null
             if (vas.optString("publicKey").lowercase() != target) return null
-            val identityId = enrolled?.optString("identityId").orEmpty()
-            return EnrolledPhone(vas.optString("vasPhoneId"), identityId)
+            return EnrolledPhone(
+                vasPhoneId = vas.optString("vasPhoneId"),
+                identityId = enrolled?.optString("identityId").orEmpty(),
+                deviceType = enrolled?.optString("deviceType").orEmpty(),
+                keyDeviceSubtype = enrolled?.optString("keyDeviceSubtype").orEmpty(),
+            )
         }
 
         when (val ep = user.opt("enrolledPhones")) {

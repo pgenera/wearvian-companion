@@ -57,21 +57,35 @@ class RivianCloud(
         vehicleId: String,
         publicKeyHex: String,
         deviceName: String,
+        // EXPERIMENT (see docs): when true, try to register as a watch by sending the optional
+        // EnrollPhoneAttributes fields the official app leaves absent — keyDeviceSubtype="WATCH" and
+        // source="MOBILE" — instead of overriding `type` (which the cloud ignored for device class).
+        // `type` stays "phone" either way. Unconfirmed the server honors keyDeviceSubtype="WATCH";
+        // we log the readback deviceType/keyDeviceSubtype so the result is visible in logcat.
+        asWatch: Boolean,
     ): RivianGql.EnrolledPhone {
+        val keyDeviceSubtype = if (asWatch) "WATCH" else null
+        val source = if (asWatch) "MOBILE" else null
         val body = RivianGql.enrollPhoneBody(
             userId = userId,
             vehicleId = vehicleId,
             publicKeyHex = publicKeyHex,
             deviceType = "phone",
             deviceName = deviceName,
+            keyDeviceSubtype = keyDeviceSubtype,
+            source = source,
         )
-        logi("enrollPhone: vehicleId=$vehicleId deviceName=$deviceName publicKeyLen=${publicKeyHex.length}")
-        val ok = RivianGql.parseEnrollSuccess(authedPost(tokens, body))
+        logi("enrollPhone: vehicleId=$vehicleId asWatch=$asWatch type=phone keyDeviceSubtype=$keyDeviceSubtype source=$source deviceName=$deviceName publicKeyLen=${publicKeyHex.length}")
+        logi("enrollPhone: request body=$body")
+        val resp = authedPost(tokens, body)
+        logi("enrollPhone: response=$resp")
+        val ok = RivianGql.parseEnrollSuccess(resp)
         logi("enrollPhone: success=$ok")
         if (!ok) throw RivianCloudError("EnrollPhone returned success=false")
         val refreshed = authedPost(tokens, RivianGql.getUserInfoBody())
         return RivianGql.findEnrolledPhone(refreshed, publicKeyHex)?.also {
-            logi("enrollPhone: read back vasPhoneId=${it.vasPhoneId} identityId=${it.identityId}")
+            logi("enrollPhone: read back vasPhoneId=${it.vasPhoneId} identityId=${it.identityId} " +
+                "deviceType='${it.deviceType}' keyDeviceSubtype='${it.keyDeviceSubtype}' (sent asWatch=$asWatch)")
         } ?: run {
             logw("enrollPhone: enrolled phone not found in getUserInfo after EnrollPhone")
             throw RivianCloudError("Enrolled phone not found in getUserInfo after EnrollPhone")

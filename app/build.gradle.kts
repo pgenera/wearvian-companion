@@ -22,6 +22,16 @@ val buildTime: String = SimpleDateFormat("yyyy-MM-dd HH:mm").apply {
     timeZone = TimeZone.getTimeZone("America/New_York")
 }.format(Date())
 
+// Current git branch, stamped into BuildConfig.GIT_BRANCH so a non-main build is obvious on-device.
+// Empty if git isn't available; the UI only shows it when it's not "main".
+val gitBranch: String = runCatching {
+    val p = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD")
+        .directory(rootDir)
+        .redirectErrorStream(true)
+        .start()
+    p.inputStream.bufferedReader().readText().trim().also { p.waitFor() }
+}.getOrDefault("")
+
 android {
     namespace = "org.fivesevenfive.wearvian.companion"
     compileSdk = 35
@@ -35,9 +45,10 @@ android {
         targetSdk = 35       // Play requires new apps to target API 35+
         // versionCode lanes under the shared package: 1xxx = Wear, 2xxx = phone.
         // Must stay unique across BOTH apps and only ever increase.
-        versionCode = 2008
-        versionName = "0.4.0"
+        versionCode = 2010
+        versionName = "0.4.2"
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
+        buildConfigField("String", "GIT_BRANCH", "\"$gitBranch\"")
     }
 
     signingConfigs {
@@ -62,6 +73,11 @@ android {
                 "proguard-rules.pro",
             )
             if (keystorePropertiesFile.exists()) signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            // Debug builds get a "- debug" version suffix so a debug build uploaded to Play
+            // (Internal App Sharing) is unmistakable from a real release on-device and in the console.
+            versionNameSuffix = " - debug"
         }
     }
 

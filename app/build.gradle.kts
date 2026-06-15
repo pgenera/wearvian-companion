@@ -94,6 +94,12 @@ android {
         compose = true
         buildConfig = true
     }
+
+    lint {
+        // We use ComponentActivity + activity-compose (no Fragments); this lintVital check flags
+        // a transitive androidx.fragment version we never use. False positive — don't fail release.
+        disable += "InvalidFragmentVersionForActivityResult"
+    }
 }
 
 dependencies {

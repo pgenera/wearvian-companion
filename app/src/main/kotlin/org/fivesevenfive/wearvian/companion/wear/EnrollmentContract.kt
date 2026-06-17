@@ -53,6 +53,7 @@ object EnrollmentContract {
         vehicles: List<VehicleResult>,
         userId: String,
         tokens: SessionTokens,
+        asWatch: Boolean,
     ): ByteArray {
         val arr = JSONArray()
         vehicles.forEach { v ->
@@ -70,6 +71,10 @@ object EnrollmentContract {
             .put("v", VERSION)
             .put("requestId", requestId)
             .put("status", "ok")
+            // Device subtype registered with Rivian: true = enrolled as a WATCH (car does NO passive
+            // lock/unlock), false = phone (full proximity). The watch persists this to drive its
+            // presence behavior. Absent from old companions → the watch defaults to phone.
+            .put("asWatch", asWatch)
             .put("vehicles", arr)
             .put("userId", userId)
             .put(

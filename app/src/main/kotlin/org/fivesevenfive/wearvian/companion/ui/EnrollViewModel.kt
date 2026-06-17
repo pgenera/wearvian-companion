@@ -145,9 +145,9 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
         }
         val userId = results.firstOrNull()?.second.orEmpty()
         val vehicles = results.map { it.first }
-        val payload = EnrollmentContract.successResult(req.requestId, vehicles, userId, tokens)
+        val payload = EnrollmentContract.successResult(req.requestId, vehicles, userId, tokens, enrollAsWatch)
         val node = PendingEnrollment.sourceNodeId
-        logi("finishEnrollment: enrolled ${vehicles.size} vehicle(s); sending result to node=$node")
+        logi("finishEnrollment: enrolled ${vehicles.size} vehicle(s) asWatch=$enrollAsWatch; sending result to node=$node")
         node?.let { withContext(Dispatchers.IO) { transport.sendResult(it, payload) } }
         PendingEnrollment.clear()
         _state.value = UiState.Done(vehicles.size)

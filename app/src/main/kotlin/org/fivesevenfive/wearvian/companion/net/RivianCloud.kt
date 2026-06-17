@@ -57,11 +57,12 @@ class RivianCloud(
         vehicleId: String,
         publicKeyHex: String,
         deviceName: String,
-        // EXPERIMENT (see docs): when true, try to register as a watch by sending the optional
-        // EnrollPhoneAttributes fields the official app leaves absent — keyDeviceSubtype="WATCH" and
-        // source="MOBILE" — instead of overriding `type` (which the cloud ignored for device class).
-        // `type` stays "phone" either way. Unconfirmed the server honors keyDeviceSubtype="WATCH";
-        // we log the readback deviceType/keyDeviceSubtype so the result is visible in logcat.
+        // When true, register as a WATCH by sending the optional EnrollPhoneAttributes fields the
+        // official app leaves absent — keyDeviceSubtype="WATCH" and source="MOBILE" — instead of
+        // overriding `type` (which the cloud ignored for device class). `type` stays "phone" either way.
+        // CONFIRMED 2026-06-17 (on-vehicle): the server honours keyDeviceSubtype="WATCH" — the key then
+        // shows up as a watch in the vehicle, and the car does NO passive lock/unlock for it (drive still
+        // works). So asWatch=true → manual-lock/unlock-only key; asWatch=false → full proximity (phone).
         asWatch: Boolean,
     ): RivianGql.EnrolledPhone {
         val keyDeviceSubtype = if (asWatch) "WATCH" else null

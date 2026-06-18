@@ -7,10 +7,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -24,25 +27,32 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import org.fivesevenfive.wearvian.companion.BuildConfig
 import org.fivesevenfive.wearvian.companion.ui.EnrollViewModel.UiState
 import org.fivesevenfive.wearvian.companion.util.logi
@@ -50,11 +60,22 @@ import org.fivesevenfive.wearvian.companion.util.logi
 class MainActivity : ComponentActivity() {
 
     private val vm: EnrollViewModel by viewModels()
+    private val importVm: ImportViewModel by viewModels()
 
     private val notifPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             logi("POST_NOTIFICATIONS granted=$granted")
         }
+
+    private fun launchScanner() {
+        val options = GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+            .build()
+        GmsBarcodeScanning.getClient(this, options).startScan()
+            .addOnSuccessListener { barcode -> barcode.rawValue?.let { importVm.onQrScanned(it) } }
+            .addOnCanceledListener { logi("QR scan cancelled") }
+            .addOnFailureListener { logi("QR scan failed: ${it.message}") }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,11 +87,15 @@ class MainActivity : ComponentActivity() {
             WearvianTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val state by vm.state.collectAsStateWithLifecycle()
+                    val importState by importVm.state.collectAsStateWithLifecycle()
                     EnrollScreen(
                         state = state,
+                        importState = importState,
                         onCredentials = vm::submitCredentials,
                         onOtp = vm::submitOtp,
                         onReset = vm::reset,
+                        onImport = ::launchScanner,
+                        onImportReset = importVm::reset,
                     )
                 }
             }
@@ -78,47 +103,72 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Taps on the bottom half needed to reveal the hidden HA-key import button. */
+private const val SECRET_TAPS = 5
+
 @Composable
 private fun EnrollScreen(
     state: UiState,
+    importState: ImportViewModel.UiState,
     onCredentials: (String, String, Boolean) -> Unit,
     onOtp: (String) -> Unit,
     onReset: () -> Unit,
+    onImport: () -> Unit,
+    onImportReset: () -> Unit,
 ) {
+    var showImport by remember { mutableStateOf(false) }
+    var taps by remember { mutableIntStateOf(0) }
+
     // targetSdk 35 enforces edge-to-edge: the Surface background still spans under the system
     // bars, but inset the content so nothing draws beneath the status/navigation bars.
     Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text("wearvian companion", style = MaterialTheme.typography.headlineSmall)
-        when (state) {
-            is UiState.Waiting -> Text(
-                "Waiting for your watch. Open wearvian on your Pixel Watch and tap " +
-                    "“Enroll” to begin.",
-            )
+        // Hidden gesture: the import button stays out of sight until you tap the bottom half of the
+        // screen 5 times. This detector sits BELOW the content, so taps on empty areas reach it while
+        // taps on the form's fields/buttons are consumed by them first.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.5f)
+                .align(Alignment.BottomCenter)
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        if (!showImport && ++taps >= SECRET_TAPS) showImport = true
+                    }
+                },
+        )
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("wearvian companion", style = MaterialTheme.typography.headlineSmall)
+            when (state) {
+                is UiState.Waiting -> Text(
+                    "Waiting for your watch. Open wearvian on your Pixel Watch and tap " +
+                        "“Enroll” to begin.",
+                )
 
-            is UiState.NeedCredentials -> CredentialsForm(state.watchName, state.rememberedEmail, onCredentials)
+                is UiState.NeedCredentials -> CredentialsForm(state.watchName, state.rememberedEmail, onCredentials)
 
-            is UiState.MfaRequired -> OtpForm(state.email, onOtp)
+                is UiState.MfaRequired -> OtpForm(state.email, onOtp)
 
-            is UiState.Working -> {
-                CircularProgressIndicator()
-                Text(state.message)
+                is UiState.Working -> {
+                    CircularProgressIndicator()
+                    Text(state.message)
+                }
+
+                is UiState.Done -> {
+                    Text("Enrolled with ${state.vehicleCount} vehicle(s). Your watch can now unlock and drive your Rivian offline.")
+                    Button(onClick = onReset) { Text("Done") }
+                }
+
+                is UiState.Failed -> {
+                    Text("Enrollment failed: ${state.error}", color = MaterialTheme.colorScheme.error)
+                    Button(onClick = onReset) { Text("Try again") }
+                }
             }
 
-            is UiState.Done -> {
-                Text("Enrolled with ${state.vehicleCount} vehicle(s). Your watch can now unlock and drive your Rivian offline.")
-                Button(onClick = onReset) { Text("Done") }
-            }
-
-            is UiState.Failed -> {
-                Text("Enrollment failed: ${state.error}", color = MaterialTheme.colorScheme.error)
-                Button(onClick = onReset) { Text("Try again") }
-            }
+            if (showImport) ImportSection(importState, onImport, onImportReset)
         }
-    }
         // Show the git branch only when it isn't main (or unknown), so a feature build is obvious.
         val branchSuffix = BuildConfig.GIT_BRANCH
             .takeIf { it.isNotBlank() && it != "main" }
@@ -130,6 +180,36 @@ private fun EnrollScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
         )
+    }
+}
+
+/** Hidden debug section: import an existing key (e.g. from Home Assistant) via QR. */
+@Composable
+private fun ImportSection(
+    importState: ImportViewModel.UiState,
+    onImport: () -> Unit,
+    onReset: () -> Unit,
+) {
+    HorizontalDivider()
+    Text("Import key", style = MaterialTheme.typography.titleMedium)
+    when (importState) {
+        is ImportViewModel.UiState.Idle ->
+            OutlinedButton(onClick = onImport) { Text("Scan HA import QR") }
+
+        is ImportViewModel.UiState.Working -> {
+            CircularProgressIndicator()
+            Text(importState.message)
+        }
+
+        is ImportViewModel.UiState.Done -> {
+            Text("Imported key for ${importState.vin}. Open wearvian on your watch to pair.")
+            Button(onClick = onReset) { Text("Done") }
+        }
+
+        is ImportViewModel.UiState.Failed -> {
+            Text("Import failed: ${importState.error}", color = MaterialTheme.colorScheme.error)
+            OutlinedButton(onClick = { onReset(); onImport() }) { Text("Try again") }
+        }
     }
 }
 

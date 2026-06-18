@@ -119,6 +119,10 @@ dependencies {
     // Wear OS Data Layer (phone side) — hand enrollment results to the watch
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
 
+    // QR scanning for the HA-key import flow — GMS Code Scanner (Play Services UI,
+    // no CameraX, no camera permission; the scanner module is fetched on first use).
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+
     // Encrypted on-device storage for session tokens (monthly re-auth reuse)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 

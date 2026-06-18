@@ -156,4 +156,58 @@ object RivianGql {
         }
         return null
     }
+
+    /**
+     * An already-enrolled key resolved by its public key, for the HA-import flow: the key's
+     * vasPhoneId, the subtype Rivian registered it as, and the identityId per vehicle it's
+     * enrolled to. Unlike [findEnrolledPhone], this correctly handles `enrolled` being a LIST
+     * (one record per vehicle) — the shape real accounts return — not just a single object.
+     */
+    data class EnrolledKey(
+        val vasPhoneId: String,
+        val keyDeviceSubtype: String,
+        val identityByVehicleId: Map<String, String>,
+    )
+
+    fun findEnrolledKey(responseJson: String, publicKeyHex: String): EnrolledKey? {
+        val user = JSONObject(responseJson).getJSONObject("data").getJSONObject("currentUser")
+        val target = publicKeyHex.lowercase()
+
+        fun records(node: Any?): List<JSONObject> = when (node) {
+            is JSONArray -> (0 until node.length()).mapNotNull { node.optJSONObject(it) }
+            is JSONObject -> listOf(node)
+            else -> emptyList()
+        }
+
+        fun build(vas: JSONObject?, enrolled: Any?): EnrolledKey? {
+            if (vas == null || vas.optString("publicKey").lowercase() != target) return null
+            val recs = records(enrolled)
+            val identities = recs.mapNotNull { r ->
+                val vid = r.optString("vehicleId")
+                if (vid.isNotEmpty()) vid to r.optString("identityId") else null
+            }.toMap()
+            val subtype = recs.firstOrNull { it.optString("keyDeviceSubtype").isNotEmpty() }
+                ?.optString("keyDeviceSubtype").orEmpty()
+            return EnrolledKey(vas.optString("vasPhoneId"), subtype, identities)
+        }
+
+        when (val ep = user.opt("enrolledPhones")) {
+            is JSONArray -> for (i in 0 until ep.length()) {
+                val obj = ep.optJSONObject(i) ?: continue
+                build(obj.optJSONObject("vas"), obj.opt("enrolled"))?.let { return it }
+            }
+            is JSONObject -> {
+                val vasArr = ep.optJSONArray("vas")
+                if (vasArr != null) {
+                    val enrArr = ep.optJSONArray("enrolled")
+                    for (i in 0 until vasArr.length()) {
+                        build(vasArr.optJSONObject(i), enrArr?.opt(i))?.let { return it }
+                    }
+                } else {
+                    build(ep.optJSONObject("vas"), ep.opt("enrolled"))?.let { return it }
+                }
+            }
+        }
+        return null
+    }
 }

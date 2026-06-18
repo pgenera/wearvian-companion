@@ -16,5 +16,11 @@ keystore.properties
 *.keystore
 !debug.keystore
 
+# Home Assistant key-import inputs — contain real Rivian credentials, NEVER commit.
+# tools/ha_to_qr.py reads these at runtime; the files themselves must stay out of git.
+core.config_entries
+ha-key.json
+*.storage
+
 # Kotlin compiler session artifacts
 .kotlin/

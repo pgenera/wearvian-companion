@@ -46,6 +46,39 @@ class RivianCloud(
         return info
     }
 
+    /** One vehicle the imported key already controls, with the crypto material the watch needs. */
+    data class ImportVehicle(
+        val vehicleId: String,
+        val vin: String,
+        val vasVehicleId: String,
+        val vehiclePublicKey: String,
+        val vasPhoneId: String,
+        val identityId: String,
+    )
+
+    data class ImportResolution(val userId: String, val asWatch: Boolean, val vehicles: List<ImportVehicle>)
+
+    /**
+     * For the HA-import flow: with an already-enrolled key (identified by [publicKeyHex]), one
+     * authenticated getUserInfo resolves the vasPhoneId + vehicle crypto material — NO EnrollPhone,
+     * since the key is already registered. The [tokens] here pair a freshly-minted CSRF/app-session
+     * with the imported user_session_token (validated: this authenticates getUserInfo).
+     */
+    fun resolveImport(tokens: SessionTokens, publicKeyHex: String): ImportResolution {
+        logi("resolveImport: requesting getUserInfo for imported key")
+        val resp = authedPost(tokens, RivianGql.getUserInfoBody())
+        val info = RivianGql.parseUserInfo(resp)
+        val key = RivianGql.findEnrolledKey(resp, publicKeyHex)
+            ?: throw RivianCloudError("This key isn't enrolled on the signed-in Rivian account")
+        val vehicles = key.identityByVehicleId.mapNotNull { (vehicleId, identityId) ->
+            val v = info.vehicles.firstOrNull { it.vehicleId == vehicleId } ?: return@mapNotNull null
+            ImportVehicle(v.vehicleId, v.vin, v.vasVehicleId, v.vehiclePublicKey, key.vasPhoneId, identityId)
+        }
+        if (vehicles.isEmpty()) throw RivianCloudError("No vehicle on the account matches the imported key")
+        logi("resolveImport: resolved ${vehicles.size} vehicle(s) subtype=${key.keyDeviceSubtype}")
+        return ImportResolution(info.userId, key.keyDeviceSubtype.equals("WATCH", ignoreCase = true), vehicles)
+    }
+
     /**
      * Enroll [publicKeyHex] (the watch's public key) against [vehicleId], then
      * re-read getUserInfo to recover the resulting vasPhoneId + identityId.

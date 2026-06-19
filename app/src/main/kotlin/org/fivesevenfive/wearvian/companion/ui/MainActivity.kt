@@ -7,13 +7,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
+import org.fivesevenfive.wearvian.companion.util.DebugLog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -121,71 +126,100 @@ private fun EnrollScreen(
     var showImport by remember { mutableStateOf(false) }
     var taps by remember { mutableIntStateOf(0) }
 
-    // targetSdk 35 enforces edge-to-edge: the Surface background still spans under the system
-    // bars, but inset the content so nothing draws beneath the status/navigation bars.
-    Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text("wearvian companion", style = MaterialTheme.typography.headlineSmall)
-            when (state) {
-                is UiState.Waiting -> Text(
-                    "Waiting for your watch. Open wearvian on your Pixel Watch and tap " +
-                        "“Enroll” to begin.",
+    // targetSdk 35 enforces edge-to-edge: inset the content so nothing draws under the system bars.
+    // Split vertically: the normal UI on top, an on-screen log pane docked in the bottom half so the
+    // enroll/import flow is debuggable on a device without adb.
+    Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // Hidden gesture: 5 taps on the title reveals the HA-key import button. (The bottom half
+                // is the log pane now, so the reveal lives on the title — a concrete, reliable tap target.)
+                Text(
+                    "wearvian companion",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.pointerInput(Unit) {
+                        detectTapGestures { if (!showImport && ++taps >= SECRET_TAPS) showImport = true }
+                    },
                 )
+                when (state) {
+                    is UiState.Waiting -> Text(
+                        "Waiting for your watch. Open wearvian on your Pixel Watch and tap " +
+                            "“Enroll” to begin.",
+                    )
 
-                is UiState.NeedCredentials -> CredentialsForm(state.watchName, state.rememberedEmail, onCredentials)
+                    is UiState.NeedCredentials -> CredentialsForm(state.watchName, state.rememberedEmail, onCredentials)
 
-                is UiState.MfaRequired -> OtpForm(state.email, onOtp)
+                    is UiState.MfaRequired -> OtpForm(state.email, onOtp)
 
-                is UiState.Working -> {
-                    CircularProgressIndicator()
-                    Text(state.message)
+                    is UiState.Working -> {
+                        CircularProgressIndicator()
+                        Text(state.message)
+                    }
+
+                    is UiState.Done -> {
+                        Text("Enrolled with ${state.vehicleCount} vehicle(s). Your watch can now unlock and drive your Rivian offline.")
+                        Button(onClick = onReset) { Text("Done") }
+                    }
+
+                    is UiState.Failed -> {
+                        Text("Enrollment failed: ${state.error}", color = MaterialTheme.colorScheme.error)
+                        Button(onClick = onReset) { Text("Try again") }
+                    }
                 }
 
-                is UiState.Done -> {
-                    Text("Enrolled with ${state.vehicleCount} vehicle(s). Your watch can now unlock and drive your Rivian offline.")
-                    Button(onClick = onReset) { Text("Done") }
-                }
+                if (showImport) ImportSection(importState, onImport, onImportReset)
+            }
+            // Show the git branch only when it isn't main (or unknown), so a feature build is obvious.
+            val branchSuffix = BuildConfig.GIT_BRANCH
+                .takeIf { it.isNotBlank() && it != "main" }
+                ?.let { " · $it" }
+                .orEmpty()
+            Text(
+                text = "v${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TIME}$branchSuffix",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
+            )
+        }
+        LogPane(modifier = Modifier.weight(1f).fillMaxWidth())
+    }
+}
 
-                is UiState.Failed -> {
-                    Text("Enrollment failed: ${state.error}", color = MaterialTheme.colorScheme.error)
-                    Button(onClick = onReset) { Text("Try again") }
+/** On-screen log pane (bottom half) fed by [DebugLog] — newest at the bottom, auto-scrolled. */
+@Composable
+private fun LogPane(modifier: Modifier = Modifier) {
+    val lines by DebugLog.flow.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    LaunchedEffect(lines.size) {
+        if (lines.isNotEmpty()) listState.scrollToItem(lines.size - 1)
+    }
+    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant, tonalElevation = 2.dp) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Logs", style = MaterialTheme.typography.labelMedium)
+                TextButton(onClick = { DebugLog.clear() }) { Text("Clear") }
+            }
+            HorizontalDivider()
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            ) {
+                items(lines) { line ->
+                    Text(
+                        text = line,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-
-            if (showImport) ImportSection(importState, onImport, onImportReset)
-        }
-        // Show the git branch only when it isn't main (or unknown), so a feature build is obvious.
-        val branchSuffix = BuildConfig.GIT_BRANCH
-            .takeIf { it.isNotBlank() && it != "main" }
-            ?.let { " · $it" }
-            .orEmpty()
-        Text(
-            text = "v${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TIME}$branchSuffix",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
-        )
-        // Hidden gesture: tap the bottom half of the screen 5 times to reveal the import button.
-        // This detector is the TOP-most child so it actually receives the taps — the scrolling Column
-        // would otherwise capture them across its whole area. It does NOT consume the events
-        // (awaitFirstDown(requireUnconsumed = false) + no consume call), so the form's fields, buttons
-        // and scrolling underneath keep working normally.
-        if (!showImport) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.5f)
-                    .align(Alignment.BottomCenter)
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            if (waitForUpOrCancellation() != null && ++taps >= SECRET_TAPS) showImport = true
-                        }
-                    },
-            )
         }
     }
 }

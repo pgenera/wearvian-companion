@@ -8,6 +8,7 @@ import org.fivesevenfive.wearvian.companion.auth.RivianAuthClient.SessionTokens
 import org.fivesevenfive.wearvian.companion.protocol.RivianGql
 import org.fivesevenfive.wearvian.companion.util.logi
 import org.fivesevenfive.wearvian.companion.util.logw
+import java.util.concurrent.TimeUnit
 
 /**
  * Authenticated Rivian GraphQL calls used during enrollment: `getUserInfo` and
@@ -18,7 +19,11 @@ import org.fivesevenfive.wearvian.companion.util.logw
  * app never generates key material.
  */
 class RivianCloud(
-    private val http: OkHttpClient = OkHttpClient(),
+    // Bound the whole call so a stuck network request surfaces as an error (visible in the on-screen
+    // log / UI) instead of hanging the enrollment or import flow indefinitely.
+    private val http: OkHttpClient = OkHttpClient.Builder()
+        .callTimeout(45, TimeUnit.SECONDS)
+        .build(),
 ) {
     class RivianCloudError(message: String) : Exception(message)
 

@@ -14,12 +14,15 @@ fun logd(msg: String) {
 
 fun logi(msg: String) {
     Log.i(TAG, msg)
+    DebugLog.add(msg)
 }
 
 fun logw(msg: String, t: Throwable? = null) {
     if (t != null) Log.w(TAG, msg, t) else Log.w(TAG, msg)
+    DebugLog.add("W: $msg" + (t?.let { " — ${it.message}" } ?: ""))
 }
 
 fun loge(msg: String, t: Throwable? = null) {
     if (t != null) Log.e(TAG, msg, t) else Log.e(TAG, msg)
+    DebugLog.add("E: $msg" + (t?.let { " — ${it.message}" } ?: ""))
 }

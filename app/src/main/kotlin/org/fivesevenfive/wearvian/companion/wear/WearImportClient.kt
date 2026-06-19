@@ -30,11 +30,18 @@ class WearImportClient(private val context: Context) {
         vehicles: List<EnrollmentContract.VehicleResult>,
         timeoutMs: Long = 60_000L,
     ): ImportContract.Ack {
-        val messageClient = Wearable.getMessageClient(context)
         val requestId = UUID.randomUUID().toString()
         logi("pushKey: requestId=$requestId vehicles=${vehicles.size} asWatch=$asWatch")
-        val deferred = CompletableDeferred<ImportContract.Ack>()
 
+        // Resolve the watch FIRST — this path swallows the ApiException(API_UNAVAILABLE) thrown when
+        // the Wearable Data Layer isn't present (no Wear OS app / no paired watch). Bail with a clean
+        // NoWatchException before touching the message client, whose addListener() would otherwise
+        // throw that raw GMS error.
+        val nodes = resolveWatchNodes()
+        if (nodes.isEmpty()) throw NoWatchException()
+
+        val messageClient = Wearable.getMessageClient(context)
+        val deferred = CompletableDeferred<ImportContract.Ack>()
         val listener = MessageClient.OnMessageReceivedListener { event ->
             if (event.path != ImportContract.PATH_RESULT) return@OnMessageReceivedListener
             runCatching { ImportContract.parseAck(event.data) }
@@ -48,8 +55,6 @@ class WearImportClient(private val context: Context) {
         }
         messageClient.addListener(listener).await()
         try {
-            val nodes = resolveWatchNodes()
-            if (nodes.isEmpty()) throw NoWatchException()
             val payload = ImportContract.buildKey(
                 requestId, privateKeyPemBase64, publicKeyHex, userId, asWatch, vehicles,
             )

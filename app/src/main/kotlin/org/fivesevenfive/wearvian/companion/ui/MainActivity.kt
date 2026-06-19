@@ -184,7 +184,9 @@ private fun EnrollScreen(
                 modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
             )
         }
-        LogPane(modifier = Modifier.weight(1f).fillMaxWidth())
+        // The log pane is part of the hidden debug surface: it appears only once the import button
+        // is revealed (5 taps on the title), so the normal screen stays clean.
+        if (showImport) LogPane(modifier = Modifier.weight(1f).fillMaxWidth())
     }
 }
 

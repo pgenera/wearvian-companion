@@ -47,13 +47,17 @@ class ImportViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         logi("import: QR accepted for ${payload.username}")
-        _state.value = UiState.Working("Resolving your vehicle with Rivian…")
+        _state.value = UiState.Working("Contacting Rivian…")
         viewModelScope.launch {
             try {
                 val ack = withContext(Dispatchers.IO) {
+                    logi("import: minting CSRF token")
                     val csrf = auth.createCsrfToken()
                     val tokens = SessionTokens(csrf.csrfToken, csrf.appSessionToken, payload.userSessionToken)
+                    _state.value = UiState.Working("Resolving your vehicle with Rivian…")
                     val resolution = cloud.resolveImport(tokens, payload.publicKeyHex)
+                    logi("import: resolved ${resolution.vehicles.size} vehicle(s); sending to watch")
+                    _state.value = UiState.Working("Sending the key to your watch…")
                     val vehicles = resolution.vehicles.map {
                         EnrollmentContract.VehicleResult(
                             vehicleId = it.vehicleId,

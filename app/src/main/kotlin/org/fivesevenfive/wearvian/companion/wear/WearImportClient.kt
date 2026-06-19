@@ -20,7 +20,7 @@ import java.util.UUID
 class WearImportClient(private val context: Context) {
 
     class NoWatchException :
-        Exception("No watch with wearvian was found. Make sure your watch is connected.")
+        Exception("No connected watch found. Run this on the phone paired with your watch (Wear OS app installed and the watch connected).")
 
     suspend fun pushKey(
         privateKeyPemBase64: String,
@@ -76,8 +76,12 @@ class WearImportClient(private val context: Context) {
                 return ids
             }
         }.onFailure { logw("pushKey: capability lookup failed", it) }
-        val all = Wearable.getNodeClient(context).connectedNodes.await().map { it.id }
-        logi("pushKey: falling back to all connected nodes=$all")
-        return all
+        // connectedNodes throws ApiException(API_UNAVAILABLE) when the Wearable Data Layer isn't
+        // available on this phone (no Wear OS companion app / no paired watch). Treat that as "no
+        // watch" so the caller shows a clean message instead of a raw GMS stack trace.
+        return runCatching { Wearable.getNodeClient(context).connectedNodes.await().map { it.id } }
+            .onFailure { logw("pushKey: node lookup failed — Wearable API unavailable on this phone?", it) }
+            .getOrDefault(emptyList())
+            .also { logi("pushKey: connected nodes=$it") }
     }
 }

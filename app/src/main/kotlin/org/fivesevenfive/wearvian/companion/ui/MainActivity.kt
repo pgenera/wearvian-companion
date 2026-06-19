@@ -7,7 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -122,20 +124,6 @@ private fun EnrollScreen(
     // targetSdk 35 enforces edge-to-edge: the Surface background still spans under the system
     // bars, but inset the content so nothing draws beneath the status/navigation bars.
     Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
-        // Hidden gesture: the import button stays out of sight until you tap the bottom half of the
-        // screen 5 times. This detector sits BELOW the content, so taps on empty areas reach it while
-        // taps on the form's fields/buttons are consumed by them first.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.5f)
-                .align(Alignment.BottomCenter)
-                .pointerInput(Unit) {
-                    detectTapGestures {
-                        if (!showImport && ++taps >= SECRET_TAPS) showImport = true
-                    }
-                },
-        )
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -180,6 +168,25 @@ private fun EnrollScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
         )
+        // Hidden gesture: tap the bottom half of the screen 5 times to reveal the import button.
+        // This detector is the TOP-most child so it actually receives the taps — the scrolling Column
+        // would otherwise capture them across its whole area. It does NOT consume the events
+        // (awaitFirstDown(requireUnconsumed = false) + no consume call), so the form's fields, buttons
+        // and scrolling underneath keep working normally.
+        if (!showImport) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.5f)
+                    .align(Alignment.BottomCenter)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            if (waitForUpOrCancellation() != null && ++taps >= SECRET_TAPS) showImport = true
+                        }
+                    },
+            )
+        }
     }
 }
 

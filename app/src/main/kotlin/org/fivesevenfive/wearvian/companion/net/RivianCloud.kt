@@ -77,9 +77,10 @@ class RivianCloud(
             source = source,
         )
         logi("enrollPhone: vehicleId=$vehicleId asWatch=$asWatch type=phone keyDeviceSubtype=$keyDeviceSubtype source=$source deviceName=$deviceName publicKeyLen=${publicKeyHex.length}")
-        logi("enrollPhone: request body=$body")
+        // Don't dump the raw request/response — they carry the public key + account identifiers.
+        // The concise line above plus the parsed read-back below are enough for diagnostics.
         val resp = authedPost(tokens, body)
-        logi("enrollPhone: response=$resp")
+        logi("enrollPhone: response bytes=${resp.length}")
         val ok = RivianGql.parseEnrollSuccess(resp)
         logi("enrollPhone: success=$ok")
         if (!ok) throw RivianCloudError("EnrollPhone returned success=false")

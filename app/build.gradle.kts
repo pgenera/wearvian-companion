@@ -34,7 +34,7 @@ val gitBranch: String = runCatching {
 
 android {
     namespace = "org.fivesevenfive.wearvian.companion"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         // MUST match the watch app's applicationId: the Wear Data Layer delivers
@@ -42,10 +42,10 @@ android {
         // The code namespace stays distinct (org.fivesevenfive.wearvian.companion).
         applicationId = "org.fivesevenfive.wearvian"
         minSdk = 26
-        targetSdk = 35       // Play requires new apps to target API 35+
+        targetSdk = 36       // Play mandates API 36 (Android 16)
         // versionCode lanes under the shared package: 1xxx = Wear, 2xxx = phone.
         // Must stay unique across BOTH apps and only ever increase.
-        versionCode = 2023
+        versionCode = 2024
         versionName = "0.8.0"
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
         buildConfigField("String", "GIT_BRANCH", "\"$gitBranch\"")

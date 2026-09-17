@@ -45,8 +45,8 @@ android {
         targetSdk = 36       // Play mandates API 36 (Android 16)
         // versionCode lanes under the shared package: 1xxx = Wear, 2xxx = phone.
         // Must stay unique across BOTH apps and only ever increase.
-        versionCode = 2024
-        versionName = "0.8.0"
+        versionCode = 2025
+        versionName = "0.8.1"
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
         buildConfigField("String", "GIT_BRANCH", "\"$gitBranch\"")
     }

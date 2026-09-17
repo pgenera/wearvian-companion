@@ -95,8 +95,7 @@ private fun EnrollScreen(
         Text("wearvian companion", style = MaterialTheme.typography.headlineSmall)
         when (state) {
             is UiState.Waiting -> Text(
-                "Waiting for your watch. Open wearvian on your Pixel Watch and tap " +
-                    "“Enroll” to begin.",
+                "Waiting for your watch. Open wearvian on your watch and tap “Enroll” to begin.",
             )
 
             is UiState.NeedCredentials -> CredentialsForm(state.watchName, state.rememberedEmail, onCredentials)
@@ -109,9 +108,24 @@ private fun EnrollScreen(
             }
 
             is UiState.Done -> {
-                Text("Enrolled with ${state.vehicleCount} vehicle(s). Your watch can now unlock and drive your Rivian offline.")
+                if (state.vehicleCount == 0) {
+                    // "Enrolled with 0 vehicle(s)" read as success while nothing was set up. The
+                    // usual cause is the account not having accepted its driver invite yet, so the
+                    // vehicle list comes back empty.
+                    Text(
+                        "No vehicles were enrolled. This Rivian account has no vehicles the watch " +
+                            "can be added to — if you were invited as a driver, accept the invite " +
+                            "in the Rivian app first, then enroll again.",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    Text(
+                        "Enrolled with ${state.vehicleCount} vehicle(s). Your watch can now unlock " +
+                            "and drive your Rivian offline.",
+                    )
+                }
                 state.warning?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error)
+                    Text("Skipped: $it", color = MaterialTheme.colorScheme.error)
                 }
                 Button(onClick = onReset) { Text("Done") }
             }

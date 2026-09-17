@@ -128,4 +128,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
+    // android.jar's org.json is a stub that throws; RivianGql is framework-free apart from it,
+    // so put the real implementation on the unit-test classpath to test parsing on the JVM.
+    testImplementation("org.json:json:20240303")
 }

@@ -110,6 +110,9 @@ private fun EnrollScreen(
 
             is UiState.Done -> {
                 Text("Enrolled with ${state.vehicleCount} vehicle(s). Your watch can now unlock and drive your Rivian offline.")
+                state.warning?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
                 Button(onClick = onReset) { Text("Done") }
             }
 

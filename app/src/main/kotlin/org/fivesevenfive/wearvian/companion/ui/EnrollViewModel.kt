@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.fivesevenfive.wearvian.companion.auth.RivianAuthClient
 import org.fivesevenfive.wearvian.companion.net.RivianCloud
+import org.fivesevenfive.wearvian.companion.protocol.RivianGql
 import org.fivesevenfive.wearvian.companion.store.SessionStore
 import org.fivesevenfive.wearvian.companion.wear.EnrollmentContract
 import org.fivesevenfive.wearvian.companion.util.loge
@@ -31,7 +32,8 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
         data class NeedCredentials(val watchName: String, val rememberedEmail: String) : UiState
         data class MfaRequired(val email: String) : UiState
         data class Working(val message: String) : UiState
-        data class Done(val vehicleCount: Int) : UiState
+        /** [warning] is set when some vehicles were skipped (e.g. already at their phone-key limit). */
+        data class Done(val vehicleCount: Int, val warning: String? = null) : UiState
         data class Failed(val error: String) : UiState
     }
 
@@ -119,10 +121,34 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
         req: EnrollmentContract.Request,
     ) {
         _state.value = UiState.Working("Enrolling watch key with your vehicles…")
-        val results = withContext(Dispatchers.IO) {
+        val blocked = mutableListOf<String>()
+        val outcome = withContext(Dispatchers.IO) {
             store.saveTokens(tokens)
             val info = cloud.getUserInfo(tokens)
-            info.vehicles.map { v ->
+            // Pre-flight: a vehicle that is already at its phone-key limit would reject
+            // EnrollPhone. Report that plainly instead of surfacing a server error.
+            val enrollable = info.vehicles.filter { v ->
+                when (val check = RivianGql.checkPhoneKeySlot(v, info.enrolledKeys, req.publicKeyHex)) {
+                    is RivianGql.SlotCheck.Full -> {
+                        logw("finishEnrollment: ${v.label} is at its phone-key limit (${check.used}/${check.max}) — skipping")
+                        blocked += RivianGql.slotFullMessage(check)
+                        false
+                    }
+                    is RivianGql.SlotCheck.AlreadyEnrolled -> {
+                        logi("finishEnrollment: ${v.label} already has this watch key — re-enrolling")
+                        true
+                    }
+                    is RivianGql.SlotCheck.Ok -> {
+                        logi("finishEnrollment: ${v.label} has ${check.free} free phone-key slot(s)")
+                        true
+                    }
+                    RivianGql.SlotCheck.Unknown -> {
+                        logi("finishEnrollment: ${v.label} reported no key slots — letting the server decide")
+                        true
+                    }
+                }
+            }
+            enrollable.map { v ->
                 // "Enroll as watch key" on → try keyDeviceSubtype="WATCH"+source="MOBILE" (see
                 // RivianCloud.enrollPhone). Off → a normal phone enrollment.
                 val enrolled = cloud.enrollPhone(
@@ -143,14 +169,19 @@ class EnrollViewModel(app: Application) : AndroidViewModel(app) {
                 ) to info.userId
             }
         }
-        val userId = results.firstOrNull()?.second.orEmpty()
-        val vehicles = results.map { it.first }
+        val vehicles = outcome.map { it.first }
+        // Nothing enrolled and at least one vehicle was over its limit → that IS the failure.
+        if (vehicles.isEmpty() && blocked.isNotEmpty()) {
+            fail(req.requestId, RivianCloud.RivianCloudError(blocked.joinToString("\n\n")))
+            return
+        }
+        val userId = outcome.firstOrNull()?.second.orEmpty()
         val payload = EnrollmentContract.successResult(req.requestId, vehicles, userId, tokens, enrollAsWatch)
         val node = PendingEnrollment.sourceNodeId
-        logi("finishEnrollment: enrolled ${vehicles.size} vehicle(s) asWatch=$enrollAsWatch; sending result to node=$node")
+        logi("finishEnrollment: enrolled ${vehicles.size} vehicle(s) asWatch=$enrollAsWatch skipped=${blocked.size}; sending result to node=$node")
         node?.let { withContext(Dispatchers.IO) { transport.sendResult(it, payload) } }
         PendingEnrollment.clear()
-        _state.value = UiState.Done(vehicles.size)
+        _state.value = UiState.Done(vehicles.size, blocked.joinToString("\n\n").ifBlank { null })
         logi("finishEnrollment: done")
     }
 

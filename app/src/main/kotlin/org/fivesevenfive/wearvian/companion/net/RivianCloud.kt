@@ -39,10 +39,53 @@ class RivianCloud(
         }
     }
 
+    /**
+     * Whether the gateway accepts the `deviceSlots` selection. Null until the first call settles
+     * it. False disables only the key-limit pre-flight — never enrollment itself.
+     */
+    private var deviceSlotsSupported: Boolean? = null
+
+    /**
+     * Fetch `getUserInfo`, degrading to the reference client's verbatim query if the gateway
+     * won't accept the added `deviceSlots` selection.
+     *
+     * One unknown field fails a whole GraphQL operation, so an unsupported selection would
+     * otherwise take enrollment down with it. A failed or data-less extended response is retried
+     * without the selection: if the retry succeeds, the selection was the problem and we latch it
+     * off for this instance; if the retry fails too, the error was real and propagates unlatched.
+     */
+    private fun fetchUserInfoJson(tokens: SessionTokens): String {
+        if (deviceSlotsSupported == false) {
+            return authedPost(tokens, RivianGql.getUserInfoBody(includeDeviceSlots = false))
+        }
+        val attempt = runCatching { authedPost(tokens, RivianGql.getUserInfoBody(includeDeviceSlots = true)) }
+        attempt.getOrNull()?.takeIf { RivianGql.hasUserInfoData(it) }?.let {
+            if (deviceSlotsSupported == null) logi("getUserInfo: deviceSlots selection accepted")
+            deviceSlotsSupported = true
+            return it
+        }
+        logw(
+            "getUserInfo: query with deviceSlots returned no usable data " +
+                "(${attempt.exceptionOrNull()?.javaClass?.simpleName ?: "no data.currentUser"}) — " +
+                "retrying without it",
+        )
+        // Not wrapped: if this throws, the failure was never about deviceSlots, and leaving
+        // deviceSlotsSupported null means the next call tries the full query again.
+        val base = authedPost(tokens, RivianGql.getUserInfoBody(includeDeviceSlots = false))
+        deviceSlotsSupported = false
+        logw("getUserInfo: gateway rejects deviceSlots — phone-key limit pre-flight disabled")
+        return base
+    }
+
     fun getUserInfo(tokens: SessionTokens): RivianGql.UserInfo {
         logi("getUserInfo: requesting")
-        val info = RivianGql.parseUserInfo(authedPost(tokens, RivianGql.getUserInfoBody()))
+        val info = RivianGql.parseUserInfo(fetchUserInfoJson(tokens))
         logi("getUserInfo: userId=${info.userId} vehicles=${info.vehicles.size} vins=${info.vehicles.map { it.vin }}")
+        // Slot counts drive the pre-flight key-limit check — log them (counts only, no key material).
+        info.vehicles.forEach { v ->
+            val enrolled = info.enrolledKeys.count { it.vehicleId == v.vehicleId }
+            logi("getUserInfo: vehicle=${v.label} phoneSlots max=${v.phoneSlotsMax} free=${v.phoneSlotsFree} enrolledKeysVisible=$enrolled")
+        }
         return info
     }
 
@@ -83,8 +126,19 @@ class RivianCloud(
         logi("enrollPhone: response bytes=${resp.length}")
         val ok = RivianGql.parseEnrollSuccess(resp)
         logi("enrollPhone: success=$ok")
-        if (!ok) throw RivianCloudError("EnrollPhone returned success=false")
-        val refreshed = authedPost(tokens, RivianGql.getUserInfoBody())
+        if (!ok) {
+            // Backstop for the pre-flight slot check in EnrollViewModel: the vehicle can fill up
+            // between getUserInfo and here, or report no slot counts at all.
+            if (RivianGql.isEnrollLimitError(resp)) {
+                logw("enrollPhone: rejected — vehicle is at its phone-key limit")
+                throw RivianCloudError(
+                    "This vehicle has reached its phone-key limit. Remove a key in the Rivian app, " +
+                        "then enroll the watch again.",
+                )
+            }
+            throw RivianCloudError("EnrollPhone returned success=false")
+        }
+        val refreshed = fetchUserInfoJson(tokens)
         return RivianGql.findEnrolledPhone(refreshed, publicKeyHex)?.also {
             logi("enrollPhone: read back vasPhoneId=${it.vasPhoneId} identityId=${it.identityId} " +
                 "deviceType='${it.deviceType}' keyDeviceSubtype='${it.keyDeviceSubtype}' (sent asWatch=$asWatch)")

@@ -45,8 +45,8 @@ android {
         targetSdk = 36       // Play mandates API 36 (Android 16)
         // versionCode lanes under the shared package: 1xxx = Wear, 2xxx = phone.
         // Must stay unique across BOTH apps and only ever increase.
-        versionCode = 2024
-        versionName = "0.8.0"
+        versionCode = 2025
+        versionName = "0.8.1"
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
         buildConfigField("String", "GIT_BRANCH", "\"$gitBranch\"")
     }
@@ -128,4 +128,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
+    // android.jar's org.json is a stub that throws; RivianGql is framework-free apart from it,
+    // so put the real implementation on the unit-test classpath to test parsing on the JVM.
+    testImplementation("org.json:json:20240303")
 }

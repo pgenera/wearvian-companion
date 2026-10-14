@@ -18,3 +18,9 @@ keystore.properties
 
 # Kotlin compiler session artifacts
 .kotlin/
+
+# Device captures — bug reports and logcats carry account addresses, Wi-Fi SSIDs, VINs and BLE
+# addresses. Never commit them; they live outside git (../rivian-re/captures/).
+*bugreport*.zip
+*.log
+*.btsnoop
